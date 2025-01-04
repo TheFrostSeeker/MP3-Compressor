@@ -9,8 +9,13 @@ import os
 import ffmpeg
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from tkinter import ttk
 import math
+import threading
+import logging
 
+# Initialiser le logging pour les erreurs
+logging.basicConfig(filename='mp3_compressor.log', level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class MP3CompressorApp:
     def __init__(self, root):
@@ -26,37 +31,41 @@ class MP3CompressorApp:
         self.create_widgets()
 
     def create_widgets(self):
+        # Frame pour organiser l'interface
+        frame = ttk.Frame(self.root)
+        frame.pack(pady=20, padx=20, fill="both", expand=True)
+
         # Bouton pour sélectionner le fichier MP3
-        self.select_file_button = tk.Button(self.root, text="Sélectionner le fichier MP3", command=self.select_file)
-        self.select_file_button.pack(pady=10)
+        self.select_file_button = ttk.Button(frame, text="Sélectionner le fichier MP3", command=self.select_file)
+        self.select_file_button.grid(row=0, column=0, pady=10, sticky="w")
 
         # Label pour afficher la taille du fichier
-        self.file_size_label = tk.Label(self.root, text="Taille du fichier : N/A")
-        self.file_size_label.pack(pady=5)
+        self.file_size_label = ttk.Label(frame, text="Taille du fichier : N/A")
+        self.file_size_label.grid(row=1, column=0, pady=5, sticky="w")
 
         # Label pour afficher le chemin du fichier source
-        self.input_file_label = tk.Label(self.root, text="Chemin du fichier source : N/A")
-        self.input_file_label.pack(pady=5)
+        self.input_file_label = ttk.Label(frame, text="Chemin du fichier source : N/A")
+        self.input_file_label.grid(row=2, column=0, pady=5, sticky="w")
 
         # Entrée pour la taille cible (en Mo)
-        self.target_size_label = tk.Label(self.root, text="Taille cible (en Mo) :")
-        self.target_size_label.pack(pady=5)
+        self.target_size_label = ttk.Label(frame, text="Taille cible (en Mo) :")
+        self.target_size_label.grid(row=3, column=0, pady=5, sticky="w")
 
-        self.target_size_entry = tk.Entry(self.root)
-        self.target_size_entry.pack(pady=5)
+        self.target_size_entry = ttk.Entry(frame)
+        self.target_size_entry.grid(row=4, column=0, pady=5, sticky="w")
 
         # Bouton pour sélectionner l'emplacement de sauvegarde
-        self.select_save_button = tk.Button(self.root, text="Sélectionner l'emplacement de sauvegarde",
-                                            command=self.select_save_location)
-        self.select_save_button.pack(pady=10)
+        self.select_save_button = ttk.Button(frame, text="Sélectionner l'emplacement de sauvegarde",
+                                             command=self.select_save_location)
+        self.select_save_button.grid(row=5, column=0, pady=10, sticky="w")
 
         # Label pour afficher le chemin du fichier de sortie
-        self.output_file_label = tk.Label(self.root, text="Chemin du fichier de sortie : N/A")
-        self.output_file_label.pack(pady=5)
+        self.output_file_label = ttk.Label(frame, text="Chemin du fichier de sortie : N/A")
+        self.output_file_label.grid(row=6, column=0, pady=5, sticky="w")
 
         # Bouton pour démarrer la compression
-        self.compress_button = tk.Button(self.root, text="Compresser", command=self.compress_mp3)
-        self.compress_button.pack(pady=20)
+        self.compress_button = ttk.Button(frame, text="Compresser", command=self.compress_mp3)
+        self.compress_button.grid(row=7, column=0, pady=20)
 
     def select_file(self):
         """Ouvre une fenêtre pour sélectionner un fichier MP3."""
@@ -89,6 +98,7 @@ class MP3CompressorApp:
             duration = float(probe['streams'][0]['duration'])
             return duration
         except ffmpeg.Error as e:
+            logging.error(f"Erreur lors de l'obtention de la durée du fichier : {e}")
             messagebox.showerror("Erreur", f"Erreur lors de l'obtention de la durée du fichier : {e}")
             return None
 
@@ -130,10 +140,13 @@ class MP3CompressorApp:
         # Calculer le bitrate
         target_bitrate = self.calculate_bitrate(target_size_mb, duration)
 
+        # Exécuter la compression dans un thread séparé
+        threading.Thread(target=self.run_compression, args=(target_bitrate,)).start()
+
+    def run_compression(self, target_bitrate):
+        """Exécuter la compression sans bloquer l'interface utilisateur."""
         try:
-            # Exécuter la compression avec ffmpeg
-            ffmpeg.input(self.input_file).output(self.output_file, audio_bitrate=target_bitrate).run(
-                overwrite_output=True)
+            ffmpeg.input(self.input_file).output(self.output_file, audio_bitrate=target_bitrate).run(overwrite_output=True)
 
             # Récupérer la taille du fichier après compression
             compressed_file_size = os.path.getsize(self.output_file)
@@ -145,8 +158,8 @@ class MP3CompressorApp:
                                           f"Taille après compression : {compressed_size_mb:.2f} Mo\n"
                                           f"Enregistré sous : {self.output_file}")
         except ffmpeg.Error as e:
+            logging.error(f"Erreur lors de la compression : {e}")
             messagebox.showerror("Erreur", f"Erreur lors de la compression : {e}")
-
 
 def main():
     root = tk.Tk()
